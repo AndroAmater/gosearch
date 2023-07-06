@@ -1,12 +1,26 @@
 package main
 
 import (
-	"os/exec"
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+func CreateMatchNodeSelectHandler(
+	path string,
+	lineNumber string,
+	preview *tview.Flex,
+	previewText *tview.TextView,
+) func() {
+	return func() {
+		output := bat(path, lineNumber)
+		previewText.Clear()
+		previewText.SetDynamicColors(true)
+		previewText.SetText(output)
+		preview.SetTitle(path)
+	}
+}
 
 func main() {
 	app := tview.NewApplication()
@@ -32,48 +46,42 @@ func main() {
 		folders := rg(searchInput.GetText())
 
 		searchResultsRootNode.ClearChildren()
+		var firstNode *tview.TreeNode
+		var firstNodeSelectHandler func()
 
-		for _, folder := range folders {
+		for i, folder := range folders {
 			folderNode := tview.NewTreeNode(folder.Path)
 			searchResultsRootNode.
 				AddChild(folderNode)
 
-			for _, match := range folder.Matches {
+			for k, match := range folder.Matches {
 				matchNode := tview.NewTreeNode(match.Text).
 					SetSelectedFunc(
-						func() func() {
-							lineNumber := strconv.Itoa(match.LineNumber)
-							path := folder.Path
-
-							return func() {
-								cmd := exec.Command(
-									"bat",
-									"--color=always",
-									"--highlight-line",
-									lineNumber,
-									path,
-								)
-								stdout, err := cmd.Output()
-
-								output := ""
-
-								if err != nil {
-									if err.Error() != "exit status 1" {
-										panic(err)
-									}
-									output = tview.TranslateANSI("No results")
-								} else {
-									output = tview.TranslateANSI(string(stdout))
-								}
-								previewText.Clear()
-								previewText.SetDynamicColors(true)
-								previewText.SetText(output)
-								preview.SetTitle(path)
-							}
-						}())
+						CreateMatchNodeSelectHandler(
+							folder.Path,
+							strconv.Itoa(match.LineNumber),
+							preview,
+							previewText,
+						))
 
 				folderNode.AddChild(matchNode)
+
+				if i == 0 && k == 0 {
+					firstNode = matchNode
+					firstNodeSelectHandler = CreateMatchNodeSelectHandler(
+						folder.Path,
+						strconv.Itoa(match.LineNumber),
+						preview,
+						previewText,
+					)
+				}
 			}
+		}
+
+		if firstNode != nil {
+			app.SetFocus(searchResults)
+			searchResults.SetCurrentNode(firstNode)
+			firstNodeSelectHandler()
 		}
 	}
 
