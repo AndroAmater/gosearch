@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
@@ -12,17 +13,23 @@ func CreateMatchNodeSelectHandler(
 	lineNumber string,
 	preview *tview.Flex,
 	previewText *tview.TextView,
+	sidebarOnly bool,
 ) func() {
 	return func() {
-		output := bat(path, lineNumber)
-		previewText.Clear()
-		previewText.SetDynamicColors(true)
-		previewText.SetText(output)
-		preview.SetTitle(path)
+		if !sidebarOnly {
+			output := bat(path, lineNumber)
+			previewText.Clear()
+			previewText.SetDynamicColors(true)
+			previewText.SetText(output)
+			preview.SetTitle(path)
+		}
 	}
 }
 
 func main() {
+	sidebarOnly := flag.Bool("sidebar-only", false, "Only show the sidebar")
+	flag.Parse()
+
 	app := tview.NewApplication()
 	searchButton := tview.NewButton("Search")
 
@@ -31,9 +38,14 @@ func main() {
 	sidebar := tview.NewFlex().
 		SetDirection(tview.FlexRow)
 
-	preview := tview.NewFlex()
-	previewText := tview.NewTextView()
-	preview.AddItem(previewText, 0, 1, false)
+	var preview *tview.Flex
+	var previewText *tview.TextView
+
+	if !*sidebarOnly {
+		preview = tview.NewFlex()
+		previewText = tview.NewTextView()
+		preview.AddItem(previewText, 0, 1, false)
+	}
 
 	searchInput := tview.NewInputField()
 
@@ -62,6 +74,7 @@ func main() {
 							strconv.Itoa(match.LineNumber),
 							preview,
 							previewText,
+							*sidebarOnly,
 						))
 
 				folderNode.AddChild(matchNode)
@@ -73,6 +86,7 @@ func main() {
 						strconv.Itoa(match.LineNumber),
 						preview,
 						previewText,
+						*sidebarOnly,
 					)
 				}
 			}
@@ -98,10 +112,11 @@ func main() {
 	searchButton.SetBorder(true).SetRect(0, 0, 5, 3)
 	searchResults.SetBorder(true).SetRect(0, 0, 0, 0)
 
-	main.
-		AddItem(sidebar, 50, 0, false).
-		AddItem(preview, 0, 1, false).
-		SetDirection(tview.FlexColumn)
+	main.AddItem(sidebar, 50, 0, false)
+	if !*sidebarOnly {
+		main.AddItem(preview, 0, 1, false)
+	}
+	main.SetDirection(tview.FlexColumn)
 
 	sidebar.
 		AddItem(searchInput, 3, 0, false).
@@ -110,9 +125,11 @@ func main() {
 		SetBorder(true).
 		SetTitle("Search")
 
-	preview.
-		SetBorder(true).
-		SetTitle("Preview")
+	if !*sidebarOnly {
+		preview.
+			SetBorder(true).
+			SetTitle("Preview")
+	}
 
 	if err := app.SetRoot(main, true).EnableMouse(true).SetFocus(searchInput).Run(); err != nil {
 		panic(err)
