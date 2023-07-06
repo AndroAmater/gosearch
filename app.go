@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"strconv"
 
 	"github.com/gdamore/tcell/v2"
@@ -14,6 +15,7 @@ func CreateMatchNodeSelectHandler(
 	preview *tview.Flex,
 	previewText *tview.TextView,
 	sidebarOnly bool,
+	pipe *os.File,
 ) func() {
 	return func() {
 		if !sidebarOnly {
@@ -22,13 +24,36 @@ func CreateMatchNodeSelectHandler(
 			previewText.SetDynamicColors(true)
 			previewText.SetText(output)
 			preview.SetTitle(path)
+		} else {
+			_, err := pipe.WriteString(path)
+			if err != nil {
+				panic(err)
+			}
+			os.Exit(0)
 		}
 	}
+}
+
+func openPipe() *os.File {
+	fifoFile := "/tmp/fifo"
+
+	f, err := os.OpenFile(fifoFile, os.O_WRONLY, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	return f
 }
 
 func main() {
 	sidebarOnly := flag.Bool("sidebar-only", false, "Only show the sidebar")
 	flag.Parse()
+
+	var pipe *os.File
+	if *sidebarOnly {
+		pipe = openPipe()
+		defer pipe.Close()
+	}
 
 	app := tview.NewApplication()
 	searchButton := tview.NewButton("Search")
@@ -75,6 +100,7 @@ func main() {
 							preview,
 							previewText,
 							*sidebarOnly,
+							pipe,
 						))
 
 				folderNode.AddChild(matchNode)
@@ -87,6 +113,7 @@ func main() {
 						preview,
 						previewText,
 						*sidebarOnly,
+						pipe,
 					)
 				}
 			}
